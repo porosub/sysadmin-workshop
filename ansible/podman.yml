@@ -1,0 +1,67 @@
+---
+- name: Install packages on labs
+  hosts: labs
+  tasks:
+    - name: Install packages
+      become: true
+      ansible.builtin.dnf:
+        name:
+          - podman
+        state: present
+
+- name: Manage groups
+  hosts: labs
+  tasks:
+    - name: Create podman group
+      become: true
+      ansible.builtin.group:
+        name: podman
+        state: present
+    - name: Add user to podman group
+      become: true
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: podman
+        append: true
+
+- name: Make rootful podman socket available to podman group
+  hosts: labs
+  tasks:
+    - name: Create /run/user/1000 directory
+      become: true
+      ansible.builtin.file:
+        path: /etc/systemd/system/podman.socket.d
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+    - name: Copy podman socket override
+      become: true
+      ansible.builtin.copy:
+        src: config/podman.override.conf
+        dest: /etc/systemd/system/podman.socket.d/override.conf
+        mode: '0644'
+        owner: root
+        group: root
+
+- name: Enable podman related services
+  hosts: labs
+  tasks:
+    - name: Enable system services
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enable: true
+        state: started
+      loop:
+        - podman.socket
+        - podman-restart.service
+    - name: Enable user services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        scope: user
+      loop:
+        - podman.socket
+        - podman-restart.service
